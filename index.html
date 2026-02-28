@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tab Orchestra</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Upload / Demo UI overlay -->
+  <div id="upload-screen">
+    <div class="upload-container">
+      <h1>Tab Orchestra</h1>
+      <p class="subtitle">Open multiple tabs to hear each instrument</p>
+
+      <div class="upload-box" id="drop-zone">
+        <input type="file" id="file-input" accept="audio/*" hidden>
+        <div class="upload-icon">&#9835;</div>
+        <p>Drop audio file here or <span class="browse-link">browse</span></p>
+        <p class="hint">MP3, WAV, FLAC, OGG — up to 20 MB</p>
+      </div>
+
+      <div class="divider"><span>or</span></div>
+
+      <button id="demo-btn" class="btn-primary">Use Demo Song</button>
+    </div>
+  </div>
+
+  <!-- Processing overlay -->
+  <div id="processing-screen" class="hidden">
+    <div class="processing-container">
+      <div class="spinner"></div>
+      <p id="status-text">Separating stems...</p>
+      <div class="progress-bar">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Waiting for stems (non-coordinator tabs) -->
+  <div id="waiting-screen" class="hidden">
+    <div class="processing-container">
+      <div class="spinner"></div>
+      <p>Waiting for stems from coordinator tab...</p>
+    </div>
+  </div>
+
+  <!-- Full assignment message -->
+  <div id="full-screen" class="hidden">
+    <div class="processing-container">
+      <h2>All Instruments Assigned</h2>
+      <p>4 tabs are already open — close one to free a slot.</p>
+    </div>
+  </div>
+
+  <!-- Main visualizer -->
+  <div id="visualizer" class="hidden">
+    <canvas id="canvas"></canvas>
+    <div id="instrument-label"></div>
+    <div id="tab-count"></div>
+    <div id="controls">
+      <button id="play-pause-btn" class="ctrl-btn">&#9654;</button>
+      <span id="time-display">0:00 / 0:00</span>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
