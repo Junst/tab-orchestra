@@ -122,7 +122,9 @@
 
   function handleMessage(e) {
     const msg = e.data;
+    if (!msg || typeof msg !== 'object' || typeof msg.type !== 'string') return;
     if (msg.from === tabId) return; // ignore own messages
+    if (msg.type === 'assign' && !STEMS.includes(msg.stem)) return;
 
     switch (msg.type) {
       case 'join':
@@ -285,7 +287,7 @@
     playStartTime = audioCtx.currentTime;
     playOffset = clampedOffset;
     isPlaying = true;
-    $playPause.innerHTML = '&#9646;&#9646;';
+    $playPause.textContent = '\u23F8';
   }
 
   function stopPlayback() {
@@ -295,7 +297,7 @@
     }
     playOffset = getCurrentOffset();
     isPlaying = false;
-    $playPause.innerHTML = '&#9654;';
+    $playPause.textContent = '\u25B6';
   }
 
   function getCurrentOffset() {
@@ -312,7 +314,7 @@
         // Song ended
         isPlaying = false;
         playOffset = 0;
-        $playPause.innerHTML = '&#9654;';
+        $playPause.textContent = '\u25B6';
         if (isCoordinator) {
           broadcast('pause', { offset: 0 });
         }
@@ -377,6 +379,12 @@
   $demoBtn.addEventListener('click', () => loadDemo());
 
   async function handleFileUpload(file) {
+    const MAX_SIZE = 20 * 1024 * 1024; // 20 MB
+    if (file.size > MAX_SIZE) {
+      $statusText.textContent = 'Error: File too large (max 20 MB).';
+      show($processing);
+      return;
+    }
     show($processing);
     $statusText.textContent = 'Uploading & separating stems...';
     $progressFill.style.width = '10%';
