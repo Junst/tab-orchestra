@@ -204,6 +204,52 @@ body {
   pointer-events: none;
 }
 
+#missing-stems {
+  position: absolute;
+  top: 48px;
+  right: 24px;
+  display: flex;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.stem-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  opacity: 0.25;
+  transition: opacity 0.3s;
+}
+
+.stem-dot.active {
+  opacity: 1.0;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.add-tab-btn {
+  position: absolute;
+  top: 76px;
+  right: 24px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ccc;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.add-tab-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+.add-tab-btn.all-assigned {
+  display: none;
+}
+
 #controls {
   position: absolute;
   bottom: 24px;

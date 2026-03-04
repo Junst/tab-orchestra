@@ -60,6 +60,8 @@
   const $tabCount   = document.getElementById('tab-count');
   const $playPause  = document.getElementById('play-pause-btn');
   const $timeDisplay = document.getElementById('time-display');
+  const $missingStems = document.getElementById('missing-stems');
+  const $addTabBtn  = document.getElementById('add-tab-btn');
 
   // ── IndexedDB helpers ──────────────────────────────────────
   function openDB() {
@@ -175,7 +177,12 @@
     const stem = findFreeStem();
     if (stem) {
       activeTabs.set(msg.from, stem);
-      broadcast('assign', { target: msg.from, stem });
+      broadcast('assign', {
+        target: msg.from,
+        stem,
+        playing: isPlaying,
+        offset: getCurrentOffset(),
+      });
       sendRoster();
     } else {
       broadcast('full', { target: msg.from });
@@ -211,11 +218,30 @@
   function handleRoster(msg) {
     activeTabs = new Map(Object.entries(msg.roster));
     updateTabCountDisplay();
+
+    // Sync playback state from coordinator
+    if (audioBuffer && msg.playing !== undefined) {
+      if (msg.playing && !isPlaying) {
+        startPlayback(msg.offset || 0);
+      } else if (!msg.playing && isPlaying) {
+        stopPlayback();
+        playOffset = msg.offset || 0;
+      }
+    } else if (!audioBuffer && msg.playing !== undefined) {
+      // Store sync info for when audio loads
+      isPlaying = msg.playing;
+      playOffset = msg.offset || 0;
+    }
   }
 
   // ── Role assignment ────────────────────────────────────────
   function handleAssign(msg) {
     assignedStem = msg.stem;
+    // Store sync state from coordinator
+    if (msg.playing !== undefined) {
+      isPlaying = msg.playing;
+      playOffset = msg.offset || 0;
+    }
     onStemAssigned();
   }
 
@@ -684,7 +710,31 @@
   function updateTabCountDisplay() {
     const count = activeTabs.size;
     $tabCount.textContent = `${count}/4 instruments playing`;
+
+    // Update stem indicator dots
+    const assigned = getAssignedStems();
+    $missingStems.innerHTML = '';
+    for (const stem of STEMS) {
+      const dot = document.createElement('div');
+      dot.className = 'stem-dot' + (assigned.has(stem) ? ' active' : '');
+      dot.style.color = STEM_COLORS[stem];
+      dot.style.backgroundColor = STEM_COLORS[stem];
+      dot.title = STEM_LABELS[stem] + (assigned.has(stem) ? '' : ' (missing)');
+      $missingStems.appendChild(dot);
+    }
+
+    // Show/hide add button
+    if (count >= 4) {
+      $addTabBtn.classList.add('all-assigned');
+    } else {
+      $addTabBtn.classList.remove('all-assigned');
+    }
   }
+
+  // Open a new tab for the next instrument
+  $addTabBtn.addEventListener('click', () => {
+    window.open(window.location.href, '_blank');
+  });
 
   function updateTimeDisplay() {
     if (!audioBuffer) return;
