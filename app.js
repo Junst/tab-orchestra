@@ -159,6 +159,9 @@
       case 'full':
         if (msg.target === tabId) showFull();
         break;
+      case 'reset':
+        resetToUpload();
+        break;
     }
   }
 
@@ -736,6 +739,26 @@
     window.open(window.location.href, '_blank');
   });
 
+  // New Song — clear everything and return to upload screen
+  const $newSongBtn = document.getElementById('new-song-btn');
+  $newSongBtn.addEventListener('click', async () => {
+    // Stop playback
+    stopPlayback();
+
+    // Clear IndexedDB
+    const db = await openDB();
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).clear();
+    await new Promise(r => { tx.oncomplete = r; });
+    db.close();
+
+    // Notify all tabs to reset
+    broadcast('reset', {});
+
+    // Reset local state
+    resetToUpload();
+  });
+
   function updateTimeDisplay() {
     if (!audioBuffer) return;
     const current = getCurrentOffset();
@@ -816,6 +839,48 @@
       sendRoster();
     }
   });
+
+  // ── Reset ─────────────────────────────────────────────────
+  function resetToUpload() {
+    // Stop audio
+    if (sourceNode) {
+      try { sourceNode.stop(); } catch (_) {}
+      sourceNode = null;
+    }
+    if (audioCtx) {
+      audioCtx.close().catch(() => {});
+      audioCtx = null;
+    }
+    audioBuffer = null;
+    analyser = null;
+    isPlaying = false;
+    playOffset = 0;
+    assignedStem = null;
+    particles = [];
+    if (animationId) {
+      cancelAnimationFrame(animationId);
+      animationId = null;
+    }
+
+    // Reset tab state
+    activeTabs.clear();
+    activeTabs.set(tabId, null);
+    isCoordinator = false;
+
+    // Back to upload
+    document.body.className = '';
+    $playPause.textContent = '\u25B6';
+    $timeDisplay.textContent = '0:00 / 0:00';
+    $progressFill.style.width = '0%';
+    show($upload);
+
+    // Re-elect as coordinator after a short delay
+    setTimeout(() => {
+      if (!assignedStem) {
+        becomeCoordinator(false);
+      }
+    }, 400);
+  }
 
   // ── Utilities ──────────────────────────────────────────────
   function sleep(ms) {
