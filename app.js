@@ -24,7 +24,7 @@
   const DB_NAME = 'tab-orchestra';
   const DB_STORE = 'stems';
   const DB_VERSION = 1;
-  const HF_SPACE_URL = 'https://solbon1212-tab-orchestra-demucs.hf.space/api/predict';
+  const HF_SPACE_BASE = 'https://solbon1212-tab-orchestra-demucs.hf.space';
   const CHANNEL_NAME = 'tab-orchestra';
 
   // ── State ──────────────────────────────────────────────────
@@ -409,49 +409,86 @@
   }
 
   async function separateWithHFSpace(file) {
-    // Upload file to HF Space Gradio API
-    // Step 1: Upload the file
-    const uploadUrl = HF_SPACE_URL.replace('/api/predict', '/upload');
-    const formData = new FormData();
-    formData.append('files', file);
+    // Gradio 5.x SSE-based API
 
+    // Step 1: Upload file
     $statusText.textContent = 'Uploading audio...';
     $progressFill.style.width = '20%';
 
-    const uploadRes = await fetch(uploadUrl, { method: 'POST', body: formData });
+    const formData = new FormData();
+    formData.append('files', file);
+    const uploadRes = await fetch(`${HF_SPACE_BASE}/gradio_api/upload`, {
+      method: 'POST',
+      body: formData,
+    });
     if (!uploadRes.ok) throw new Error('Upload failed');
     const uploadedPaths = await uploadRes.json();
 
-    $statusText.textContent = 'Separating stems (this may take ~60s)...';
+    // Step 2: Call the function (SSE)
+    $statusText.textContent = 'Separating stems (this may take ~2 min)...';
     $progressFill.style.width = '30%';
 
-    // Step 2: Call predict
-    const predictRes = await fetch(HF_SPACE_URL, {
+    const callRes = await fetch(`${HF_SPACE_BASE}/gradio_api/call/separate_stems`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        data: [{ path: uploadedPaths[0], orig_name: file.name }],
+        data: [{ path: uploadedPaths[0], orig_name: file.name, mime_type: file.type }],
       }),
     });
-    if (!predictRes.ok) throw new Error('Separation failed');
-    const result = await predictRes.json();
+    if (!callRes.ok) throw new Error('Separation request failed');
+    const { event_id } = await callRes.json();
+
+    // Step 3: Listen for result via SSE
+    const resultData = await new Promise((resolve, reject) => {
+      const es = new EventSource(`${HF_SPACE_BASE}/gradio_api/call/separate_stems/${event_id}`);
+      es.onmessage = (e) => {
+        // Heartbeat messages are empty or just whitespace
+        if (!e.data || e.data.trim() === '') return;
+        try {
+          const parsed = JSON.parse(e.data);
+          es.close();
+          resolve(parsed);
+        } catch (_) {
+          // Not JSON yet, keep waiting
+        }
+      };
+      es.addEventListener('error', (ev) => {
+        es.close();
+        reject(new Error('Separation stream error'));
+      });
+      es.addEventListener('complete', (ev) => {
+        try {
+          const parsed = JSON.parse(ev.data);
+          es.close();
+          resolve(parsed);
+        } catch (_) {
+          es.close();
+          reject(new Error('Failed to parse result'));
+        }
+      });
+      // Timeout after 5 minutes
+      setTimeout(() => { es.close(); reject(new Error('Separation timed out')); }, 300000);
+    });
 
     $progressFill.style.width = '60%';
     $statusText.textContent = 'Downloading stems...';
 
-    // Step 3: Download each stem
-    const baseUrl = HF_SPACE_URL.replace('/api/predict', '');
+    // Step 4: Download each stem file
     const stems = {};
     const stemNames = ['vocals', 'drums', 'bass', 'other'];
     for (let i = 0; i < 4; i++) {
-      const filePath = result.data[i]?.path || result.data[i];
-      const url = typeof filePath === 'string' && filePath.startsWith('http')
-        ? filePath
-        : `${baseUrl}/file=${filePath}`;
+      const stemData = resultData[i];
+      const filePath = stemData?.path || stemData?.url || stemData;
+      let url;
+      if (typeof filePath === 'string' && filePath.startsWith('http')) {
+        url = filePath;
+      } else {
+        url = `${HF_SPACE_BASE}/gradio_api/file=${filePath}`;
+      }
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Failed to download ${stemNames[i]}`);
       stems[stemNames[i]] = await res.arrayBuffer();
-      $progressFill.style.width = `${60 + (i + 1) * 5}%`;
+      $progressFill.style.width = `${60 + (i + 1) * 8}%`;
     }
 
     return stems;
