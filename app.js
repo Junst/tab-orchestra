@@ -411,17 +411,35 @@
   async function separateWithHFSpace(file) {
     // Gradio 5.x SSE-based API
 
+    // Step 0: Wake up Space if sleeping
+    $statusText.textContent = 'Connecting to server...';
+    $progressFill.style.width = '10%';
+    try {
+      const wake = await fetch(`${HF_SPACE_BASE}/gradio_api/config`, { method: 'GET' });
+      if (!wake.ok) throw new Error(`Server not ready (${wake.status})`);
+    } catch (e) {
+      throw new Error(`Cannot reach server: ${e.message}`);
+    }
+
     // Step 1: Upload file
     $statusText.textContent = 'Uploading audio...';
     $progressFill.style.width = '20%';
 
     const formData = new FormData();
     formData.append('files', file);
-    const uploadRes = await fetch(`${HF_SPACE_BASE}/gradio_api/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-    if (!uploadRes.ok) throw new Error('Upload failed');
+    let uploadRes;
+    try {
+      uploadRes = await fetch(`${HF_SPACE_BASE}/gradio_api/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+    } catch (e) {
+      throw new Error(`Upload network error: ${e.message}`);
+    }
+    if (!uploadRes.ok) {
+      const body = await uploadRes.text().catch(() => '');
+      throw new Error(`Upload failed (${uploadRes.status}): ${body.slice(0, 200)}`);
+    }
     const uploadedPaths = await uploadRes.json();
 
     // Step 2: Call the function (SSE)
@@ -435,27 +453,15 @@
         data: [{ path: uploadedPaths[0], orig_name: file.name, mime_type: file.type }],
       }),
     });
-    if (!callRes.ok) throw new Error('Separation request failed');
+    if (!callRes.ok) {
+      const body = await callRes.text().catch(() => '');
+      throw new Error(`Separation request failed (${callRes.status}): ${body.slice(0, 200)}`);
+    }
     const { event_id } = await callRes.json();
 
     // Step 3: Listen for result via SSE
     const resultData = await new Promise((resolve, reject) => {
       const es = new EventSource(`${HF_SPACE_BASE}/gradio_api/call/separate_stems/${event_id}`);
-      es.onmessage = (e) => {
-        // Heartbeat messages are empty or just whitespace
-        if (!e.data || e.data.trim() === '') return;
-        try {
-          const parsed = JSON.parse(e.data);
-          es.close();
-          resolve(parsed);
-        } catch (_) {
-          // Not JSON yet, keep waiting
-        }
-      };
-      es.addEventListener('error', (ev) => {
-        es.close();
-        reject(new Error('Separation stream error'));
-      });
       es.addEventListener('complete', (ev) => {
         try {
           const parsed = JSON.parse(ev.data);
@@ -466,8 +472,21 @@
           reject(new Error('Failed to parse result'));
         }
       });
+      es.addEventListener('error', (ev) => {
+        es.close();
+        // Try to extract error info
+        if (ev.data) {
+          reject(new Error(`Separation error: ${ev.data.slice(0, 200)}`));
+        } else {
+          reject(new Error('Separation stream disconnected'));
+        }
+      });
+      es.onerror = () => {
+        es.close();
+        reject(new Error('Separation connection lost'));
+      };
       // Timeout after 5 minutes
-      setTimeout(() => { es.close(); reject(new Error('Separation timed out')); }, 300000);
+      setTimeout(() => { es.close(); reject(new Error('Separation timed out (5 min)')); }, 300000);
     });
 
     $progressFill.style.width = '60%';
@@ -486,7 +505,7 @@
         url = `${HF_SPACE_BASE}/gradio_api/file=${filePath}`;
       }
       const res = await fetch(url);
-      if (!res.ok) throw new Error(`Failed to download ${stemNames[i]}`);
+      if (!res.ok) throw new Error(`Failed to download ${stemNames[i]} (${res.status})`);
       stems[stemNames[i]] = await res.arrayBuffer();
       $progressFill.style.width = `${60 + (i + 1) * 8}%`;
     }
