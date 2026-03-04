@@ -514,35 +514,8 @@
     }
     const { event_id } = await callRes.json();
 
-    // Step 3: Listen for result via SSE
-    const resultData = await new Promise((resolve, reject) => {
-      const es = new EventSource(`${HF_SPACE_BASE}/gradio_api/call/separate_stems/${event_id}`);
-      es.addEventListener('complete', (ev) => {
-        try {
-          const parsed = JSON.parse(ev.data);
-          es.close();
-          resolve(parsed);
-        } catch (_) {
-          es.close();
-          reject(new Error('Failed to parse result'));
-        }
-      });
-      es.addEventListener('error', (ev) => {
-        es.close();
-        // Try to extract error info
-        if (ev.data) {
-          reject(new Error(`Separation error: ${ev.data.slice(0, 200)}`));
-        } else {
-          reject(new Error('Separation stream disconnected'));
-        }
-      });
-      es.onerror = () => {
-        es.close();
-        reject(new Error('Separation connection lost'));
-      };
-      // Timeout after 5 minutes
-      setTimeout(() => { es.close(); reject(new Error('Separation timed out (5 min)')); }, 300000);
-    });
+    // Step 3: Poll for result (more reliable than EventSource for cross-origin)
+    const resultData = await pollForResult(event_id);
 
     $progressFill.style.width = '60%';
     $statusText.textContent = 'Downloading stems...';
@@ -587,6 +560,55 @@
       $statusText.textContent = `Error: ${err.message}`;
       console.error(err);
     }
+  }
+
+  // ── SSE via fetch (avoids EventSource CORS issues) ─────────
+  async function pollForResult(eventId) {
+    const url = `${HF_SPACE_BASE}/gradio_api/call/separate_stems/${eventId}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`SSE fetch failed (${res.status})`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const timeout = setTimeout(() => {
+      reader.cancel();
+    }, 300000); // 5 min
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // Parse SSE lines
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete line
+
+        let currentEvent = '';
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (currentEvent === 'complete') {
+              clearTimeout(timeout);
+              return JSON.parse(data);
+            } else if (currentEvent === 'error') {
+              clearTimeout(timeout);
+              throw new Error(`Server error: ${data}`);
+            }
+            // heartbeat or other events — continue
+          }
+        }
+      }
+    } catch (e) {
+      clearTimeout(timeout);
+      throw e;
+    }
+    clearTimeout(timeout);
+    throw new Error('Stream ended without result');
   }
 
   // ── Canvas / Visualizer ────────────────────────────────────
