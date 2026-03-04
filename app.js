@@ -500,7 +500,12 @@
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        data: [{ path: uploadedPaths[0], orig_name: file.name, mime_type: file.type }],
+        data: [{
+          path: uploadedPaths[0],
+          orig_name: file.name,
+          mime_type: file.type,
+          meta: { _type: 'gradio.FileData' },
+        }],
       }),
     });
     if (!callRes.ok) {
@@ -547,13 +552,9 @@
     const stemNames = ['vocals', 'drums', 'bass', 'other'];
     for (let i = 0; i < 4; i++) {
       const stemData = resultData[i];
-      const filePath = stemData?.path || stemData?.url || stemData;
-      let url;
-      if (typeof filePath === 'string' && filePath.startsWith('http')) {
-        url = filePath;
-      } else {
-        url = `${HF_SPACE_BASE}/gradio_api/file=${filePath}`;
-      }
+      // Use path to construct URL (the url field from Gradio can have double-path bugs)
+      const filePath = stemData?.path || stemData;
+      const url = `${HF_SPACE_BASE}/gradio_api/file=${filePath}`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Failed to download ${stemNames[i]} (${res.status})`);
       stems[stemNames[i]] = await res.arrayBuffer();
