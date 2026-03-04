@@ -42,6 +42,7 @@
   let channel = null;
   let animationId = null;
   let particles = [];
+  let loopEnabled = false;
 
   // ── DOM refs ───────────────────────────────────────────────
   const $upload     = document.getElementById('upload-screen');
@@ -62,6 +63,7 @@
   const $timeDisplay = document.getElementById('time-display');
   const $missingStems = document.getElementById('missing-stems');
   const $addTabBtn  = document.getElementById('add-tab-btn');
+  const $loopBtn    = document.getElementById('loop-btn');
 
   // ── IndexedDB helpers ──────────────────────────────────────
   function openDB() {
@@ -161,6 +163,10 @@
         break;
       case 'reset':
         resetToUpload();
+        break;
+      case 'loop':
+        loopEnabled = msg.enabled;
+        $loopBtn.classList.toggle('loop-active', loopEnabled);
         break;
     }
   }
@@ -340,12 +346,20 @@
     if (isPlaying && audioBuffer) {
       const elapsed = audioCtx.currentTime - playStartTime;
       if (playOffset + elapsed >= audioBuffer.duration - 0.1) {
-        // Song ended
-        isPlaying = false;
-        playOffset = 0;
-        $playPause.textContent = '\u25B6';
-        if (isCoordinator) {
-          broadcast('pause', { offset: 0 });
+        if (loopEnabled) {
+          // Restart from beginning
+          startPlayback(0);
+          if (isCoordinator) {
+            broadcast('play', { offset: 0 });
+          }
+        } else {
+          // Song ended
+          isPlaying = false;
+          playOffset = 0;
+          $playPause.textContent = '\u25B6';
+          if (isCoordinator) {
+            broadcast('pause', { offset: 0 });
+          }
         }
       }
     }
@@ -381,6 +395,13 @@
       startPlayback(playOffset);
       broadcast('play', { offset: playOffset });
     }
+  });
+
+  // ── Loop button ──────────────────────────────────────────────
+  $loopBtn.addEventListener('click', () => {
+    loopEnabled = !loopEnabled;
+    $loopBtn.classList.toggle('loop-active', loopEnabled);
+    broadcast('loop', { enabled: loopEnabled });
   });
 
   // ── File upload / Demo ─────────────────────────────────────
@@ -444,7 +465,7 @@
     $statusText.textContent = 'Connecting to server...';
     $progressFill.style.width = '10%';
     try {
-      const wake = await fetch(`${HF_SPACE_BASE}/gradio_api/config`, { method: 'GET' });
+      const wake = await fetch(`${HF_SPACE_BASE}/config`, { method: 'GET' });
       if (!wake.ok) throw new Error(`Server not ready (${wake.status})`);
     } catch (e) {
       throw new Error(`Cannot reach server: ${e.message}`);

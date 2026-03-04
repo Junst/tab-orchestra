@@ -304,6 +304,11 @@ body {
   background: rgba(255, 255, 255, 0.1);
 }
 
+.ctrl-btn.loop-active {
+  color: #00E5FF;
+  background: rgba(0, 229, 255, 0.12);
+}
+
 #time-display {
   font-size: 0.85rem;
   color: #888;
