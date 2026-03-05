@@ -376,6 +376,24 @@ body {
   background: rgba(0, 229, 255, 0.12);
 }
 
+.ctrl-divider {
+  color: #333;
+  font-size: 1.2rem;
+  user-select: none;
+}
+
+.ab-btn {
+  font-size: 0.85rem !important;
+  font-weight: 700;
+  width: 32px !important;
+  height: 32px !important;
+}
+
+.ab-btn.ab-set {
+  color: #FFD700;
+  background: rgba(255, 215, 0, 0.12);
+}
+
 #time-display {
   font-size: 0.85rem;
   color: #888;

@@ -48,6 +48,9 @@
   let eqLow = null;
   let eqMid = null;
   let eqHigh = null;
+  let abLoopA = null;  // seconds
+  let abLoopB = null;  // seconds
+  let abCheckInterval = null;
 
   // ── DOM refs ───────────────────────────────────────────────
   const $upload     = document.getElementById('upload-screen');
@@ -172,6 +175,19 @@
       case 'loop':
         loopEnabled = msg.enabled;
         $loopBtn.classList.toggle('loop-active', loopEnabled);
+        break;
+      case 'ab-loop':
+        abLoopA = msg.a;
+        abLoopB = msg.b;
+        $abA.classList.toggle('ab-set', msg.a !== null);
+        $abB.classList.toggle('ab-set', msg.b !== null);
+        if (msg.a !== null) $abA.title = `A: ${fmtTime(msg.a)}`;
+        if (msg.b !== null) $abB.title = `B: ${fmtTime(msg.b)}`;
+        if (msg.a !== null && msg.b !== null) startABCheck();
+        else stopABCheck();
+        break;
+      case 'ab-seek':
+        if (isPlaying) startPlayback(msg.offset || 0);
         break;
     }
   }
@@ -466,6 +482,58 @@
     $loopBtn.classList.toggle('loop-active', loopEnabled);
     broadcast('loop', { enabled: loopEnabled });
   });
+
+  // ── A-B Loop ────────────────────────────────────────────────
+  const $abA = document.getElementById('ab-a-btn');
+  const $abB = document.getElementById('ab-b-btn');
+  const $abClear = document.getElementById('ab-clear-btn');
+
+  $abA.addEventListener('click', () => {
+    abLoopA = getCurrentOffset();
+    $abA.classList.add('ab-set');
+    $abA.title = `A: ${fmtTime(abLoopA)}`;
+    broadcast('ab-loop', { a: abLoopA, b: abLoopB });
+    startABCheck();
+  });
+
+  $abB.addEventListener('click', () => {
+    abLoopB = getCurrentOffset();
+    $abB.classList.add('ab-set');
+    $abB.title = `B: ${fmtTime(abLoopB)}`;
+    broadcast('ab-loop', { a: abLoopA, b: abLoopB });
+    startABCheck();
+  });
+
+  $abClear.addEventListener('click', () => {
+    abLoopA = null;
+    abLoopB = null;
+    $abA.classList.remove('ab-set');
+    $abB.classList.remove('ab-set');
+    $abA.title = 'Set loop start';
+    $abB.title = 'Set loop end';
+    stopABCheck();
+    broadcast('ab-loop', { a: null, b: null });
+  });
+
+  function startABCheck() {
+    if (abCheckInterval) return;
+    abCheckInterval = setInterval(() => {
+      if (abLoopA !== null && abLoopB !== null && abLoopA < abLoopB && isPlaying) {
+        const cur = getCurrentOffset();
+        if (cur >= abLoopB) {
+          startPlayback(abLoopA);
+          broadcast('ab-seek', { offset: abLoopA });
+        }
+      }
+    }, 50);
+  }
+
+  function stopABCheck() {
+    if (abCheckInterval) {
+      clearInterval(abCheckInterval);
+      abCheckInterval = null;
+    }
+  }
 
   // ── File upload / Demo ─────────────────────────────────────
   $dropZone.addEventListener('click', () => $fileInput.click());
@@ -993,6 +1061,9 @@
     eqHigh = null;
     isMuted = false;
     isPlaying = false;
+    abLoopA = null;
+    abLoopB = null;
+    stopABCheck();
     playOffset = 0;
     assignedStem = null;
     particles = [];
