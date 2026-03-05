@@ -43,6 +43,11 @@
   let animationId = null;
   let particles = [];
   let loopEnabled = false;
+  let isMuted = false;
+  let gainNode = null;
+  let eqLow = null;
+  let eqMid = null;
+  let eqHigh = null;
 
   // ── DOM refs ───────────────────────────────────────────────
   const $upload     = document.getElementById('upload-screen');
@@ -287,9 +292,34 @@
 
     audioBuffer = await audioCtx.decodeAudioData(arrayBuf.slice(0));
 
+    // Audio chain: source → EQ low → EQ mid → EQ high → gain → analyser → destination
+    eqLow = audioCtx.createBiquadFilter();
+    eqLow.type = 'lowshelf';
+    eqLow.frequency.value = 250;
+    eqLow.gain.value = 0;
+
+    eqMid = audioCtx.createBiquadFilter();
+    eqMid.type = 'peaking';
+    eqMid.frequency.value = 1500;
+    eqMid.Q.value = 1;
+    eqMid.gain.value = 0;
+
+    eqHigh = audioCtx.createBiquadFilter();
+    eqHigh.type = 'highshelf';
+    eqHigh.frequency.value = 4000;
+    eqHigh.gain.value = 0;
+
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = isMuted ? 0 : 1;
+
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.8;
+
+    eqLow.connect(eqMid);
+    eqMid.connect(eqHigh);
+    eqHigh.connect(gainNode);
+    gainNode.connect(analyser);
     analyser.connect(audioCtx.destination);
 
     show($visualizer);
@@ -314,7 +344,7 @@
 
     sourceNode = audioCtx.createBufferSource();
     sourceNode.buffer = audioBuffer;
-    sourceNode.connect(analyser);
+    sourceNode.connect(eqLow);
     sourceNode.onended = onPlaybackEnded;
 
     const clampedOffset = Math.min(offset, audioBuffer.duration);
@@ -384,7 +414,7 @@
     }
   }
 
-  // ── Play/Pause button ─────────────────────────────────────
+  // ── Play/Pause button (syncs all tabs) ──────────────────────
   $playPause.addEventListener('click', () => {
     if (!audioBuffer) return;
     if (isPlaying) {
@@ -395,6 +425,39 @@
       startPlayback(playOffset);
       broadcast('play', { offset: playOffset });
     }
+  });
+
+  // ── Mute button (local only — other tabs keep playing) ─────
+  const $muteBtn = document.getElementById('mute-btn');
+  $muteBtn.addEventListener('click', () => {
+    isMuted = !isMuted;
+    if (gainNode) gainNode.gain.value = isMuted ? 0 : 1;
+    $muteBtn.textContent = isMuted ? '\uD83D\uDD07' : '\uD83D\uDD0A';
+    $muteBtn.classList.toggle('muted', isMuted);
+  });
+
+  // ── EQ sliders ─────────────────────────────────────────────
+  const $eqLow = document.getElementById('eq-low');
+  const $eqMid = document.getElementById('eq-mid');
+  const $eqHigh = document.getElementById('eq-high');
+  const $eqLowVal = document.getElementById('eq-low-val');
+  const $eqMidVal = document.getElementById('eq-mid-val');
+  const $eqHighVal = document.getElementById('eq-high-val');
+
+  $eqLow.addEventListener('input', () => {
+    const v = parseFloat($eqLow.value);
+    if (eqLow) eqLow.gain.value = v;
+    $eqLowVal.textContent = (v > 0 ? '+' : '') + v;
+  });
+  $eqMid.addEventListener('input', () => {
+    const v = parseFloat($eqMid.value);
+    if (eqMid) eqMid.gain.value = v;
+    $eqMidVal.textContent = (v > 0 ? '+' : '') + v;
+  });
+  $eqHigh.addEventListener('input', () => {
+    const v = parseFloat($eqHigh.value);
+    if (eqHigh) eqHigh.gain.value = v;
+    $eqHighVal.textContent = (v > 0 ? '+' : '') + v;
   });
 
   // ── Loop button ──────────────────────────────────────────────
@@ -783,6 +846,33 @@
     window.open(window.location.href, '_blank');
   });
 
+  // Open all 4 tabs in a 4-split layout
+  const $openAllBtn = document.getElementById('open-all-btn');
+  $openAllBtn.addEventListener('click', () => {
+    const sw = screen.availWidth;
+    const sh = screen.availHeight;
+    const hw = Math.floor(sw / 2);
+    const hh = Math.floor(sh / 2);
+    const positions = [
+      { left: 0,  top: 0,  width: hw, height: hh },
+      { left: hw, top: 0,  width: hw, height: hh },
+      { left: 0,  top: hh, width: hw, height: hh },
+    ];
+    // Current window takes top-left
+    window.moveTo(0, 0);
+    window.resizeTo(hw, hh);
+    // Open 3 more tabs
+    const missing = 4 - activeTabs.size;
+    for (let i = 0; i < Math.min(missing, 3); i++) {
+      const p = positions[i];
+      window.open(
+        window.location.href,
+        '_blank',
+        `left=${p.left},top=${p.top},width=${p.width},height=${p.height}`
+      );
+    }
+  });
+
   // New Song — clear everything and return to upload screen
   const $newSongBtn = document.getElementById('new-song-btn');
   $newSongBtn.addEventListener('click', async () => {
@@ -897,6 +987,11 @@
     }
     audioBuffer = null;
     analyser = null;
+    gainNode = null;
+    eqLow = null;
+    eqMid = null;
+    eqHigh = null;
+    isMuted = false;
     isPlaying = false;
     playOffset = 0;
     assignedStem = null;

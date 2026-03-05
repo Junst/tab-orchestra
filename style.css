@@ -270,6 +270,73 @@ body {
   color: #FF4444;
 }
 
+/* === Mute button === */
+.ctrl-btn.muted {
+  color: #FF4444;
+  opacity: 0.6;
+}
+
+/* === EQ Panel === */
+#eq-panel {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 20px;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(12px);
+  padding: 12px 24px;
+  border-radius: 16px;
+  border: 1px solid #222;
+}
+
+.eq-slider {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.eq-slider label {
+  font-size: 0.7rem;
+  color: #888;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.eq-slider input[type="range"] {
+  width: 80px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: #333;
+  border-radius: 2px;
+  outline: none;
+}
+
+.eq-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #888;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.eq-slider input[type="range"]::-webkit-slider-thumb:hover {
+  background: #ccc;
+}
+
+.eq-slider span {
+  font-size: 0.7rem;
+  color: #666;
+  font-variant-numeric: tabular-nums;
+  min-width: 24px;
+  text-align: center;
+}
+
 #controls {
   position: absolute;
   bottom: 24px;
