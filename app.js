@@ -176,19 +176,6 @@
         loopEnabled = msg.enabled;
         $loopBtn.classList.toggle('loop-active', loopEnabled);
         break;
-      case 'ab-loop':
-        abLoopA = msg.a;
-        abLoopB = msg.b;
-        $abA.classList.toggle('ab-set', msg.a !== null);
-        $abB.classList.toggle('ab-set', msg.b !== null);
-        if (msg.a !== null) $abA.title = `A: ${fmtTime(msg.a)}`;
-        if (msg.b !== null) $abB.title = `B: ${fmtTime(msg.b)}`;
-        if (msg.a !== null && msg.b !== null) startABCheck();
-        else stopABCheck();
-        break;
-      case 'ab-seek':
-        if (isPlaying) startPlayback(msg.offset || 0);
-        break;
     }
   }
 
@@ -492,7 +479,6 @@
     abLoopA = getCurrentOffset();
     $abA.classList.add('ab-set');
     $abA.title = `A: ${fmtTime(abLoopA)}`;
-    broadcast('ab-loop', { a: abLoopA, b: abLoopB });
     startABCheck();
   });
 
@@ -500,7 +486,6 @@
     abLoopB = getCurrentOffset();
     $abB.classList.add('ab-set');
     $abB.title = `B: ${fmtTime(abLoopB)}`;
-    broadcast('ab-loop', { a: abLoopA, b: abLoopB });
     startABCheck();
   });
 
@@ -512,7 +497,6 @@
     $abA.title = 'Set loop start';
     $abB.title = 'Set loop end';
     stopABCheck();
-    broadcast('ab-loop', { a: null, b: null });
   });
 
   function startABCheck() {
@@ -522,7 +506,6 @@
         const cur = getCurrentOffset();
         if (cur >= abLoopB) {
           startPlayback(abLoopA);
-          broadcast('ab-seek', { offset: abLoopA });
         }
       }
     }, 50);
